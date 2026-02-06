@@ -1,0 +1,99 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Author MDSharma
+    Version 3.2.4-singularity
+    Description ARGs-OAP for antibiotic resistance genes detection - Singularity compatible version
+
+%help
+    This container provides ARGs-OAP v3.2.4 with Singularity container compatibility fixes.
+    
+    ARGs-OAP: Online Analysis Pipeline for Anti-biotic Resistance Genes Detection
+    from Meta-genomic Data Using an Integrated Structured ARG-database.
+    
+    Usage:
+        singularity exec args_oap.sif args_oap stage_one -i input -o output -f fq -t 8
+        singularity exec args_oap.sif args_oap stage_two -i output -t 8
+    
+    For more information, see:
+        https://github.com/MDSharma/args_oap_singularity
+    
+    Database cache directory:
+        By default, database indices are stored in ~/.args_oap/db_cache/
+        Override with: --env ARGS_OAP_CACHE=/path/to/cache
+
+%environment
+    # Set locale
+    export LC_ALL=C
+    export LANG=C
+    
+    # Optional: Set custom cache location for database indices
+    # Uncomment and modify if you want a different default cache location
+    # export ARGS_OAP_CACHE=/opt/args_oap_cache
+
+%post
+    # Update and install system dependencies
+    apt-get update && apt-get install -y \
+        python3 \
+        python3-pip \
+        git \
+        wget \
+        bzip2 \
+        && rm -rf /var/lib/apt/lists/*
+    
+    # Install conda/mamba
+    wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O miniforge.sh
+    bash miniforge.sh -b -p /opt/conda
+    rm miniforge.sh
+    
+    # Add conda to PATH
+    export PATH="/opt/conda/bin:$PATH"
+    
+    # Initialize conda
+    /opt/conda/bin/conda init bash
+    
+    # Install dependencies via conda
+    /opt/conda/bin/mamba install -y -c bioconda -c conda-forge \
+        python>=3.7 \
+        diamond>=2.0.15 \
+        bwa>=0.7.17 \
+        blast>=2.12 \
+        samtools>=1.15 \
+        pandas
+    
+    # Install args_oap from this repository (Singularity-compatible version)
+    # Using the fork with Singularity container compatibility fixes
+    cd /tmp
+    git clone https://github.com/MDSharma/args_oap_singularity.git
+    cd args_oap_singularity
+    
+    # Install from the refactored branch
+    git checkout copilot/refactor-args-oap-for-singularity
+    /opt/conda/bin/pip install .
+    
+    # Clean up
+    cd /
+    rm -rf /tmp/args_oap_singularity
+    
+    # Clean conda cache
+    /opt/conda/bin/conda clean -a -y
+
+%runscript
+    # Default action when container is run
+    exec args_oap "$@"
+
+%test
+    # Test that args_oap is installed correctly
+    args_oap --version
+    
+    # Test that all required tools are available
+    which diamond
+    which bwa
+    which blastn
+    which samtools
+    
+    # Test Python imports
+    python3 -c "from args_oap import settings, make_db, stage_one, stage_two; print('All modules imported successfully')" || true
+    
+    echo "Container tests passed!"
