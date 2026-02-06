@@ -25,7 +25,7 @@ def make_db(file, output_base=None):
     
     # Determine output location if not specified
     if output_base is None:
-        db_dir = os.path.dirname(file)
+        db_dir = os.path.dirname(file) or '.'
         if os.access(db_dir, os.W_OK):
             # If writable, use the same directory as the FASTA file
             output_base = file

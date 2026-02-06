@@ -28,6 +28,9 @@ From: ubuntu:22.04
     export LC_ALL=C
     export LANG=C
     
+    # Ensure conda-installed tools are on PATH at runtime
+    export PATH="/opt/conda/bin:$PATH"
+    
     # Optional: Set custom cache location for database indices
     # Uncomment and modify if you want a different default cache location
     # export ARGS_OAP_CACHE=/opt/args_oap_cache
@@ -68,8 +71,8 @@ From: ubuntu:22.04
     git clone https://github.com/MDSharma/args_oap_singularity.git
     cd args_oap_singularity
     
-    # Install from the refactored branch
-    git checkout copilot/refactor-args-oap-for-singularity
+    # Install from main branch (after PR is merged)
+    # Note: Use a specific tag for production (e.g., git checkout v3.2.4-singularity)
     /opt/conda/bin/pip install .
     
     # Clean up
@@ -94,6 +97,9 @@ From: ubuntu:22.04
     which samtools
     
     # Test Python imports
-    python3 -c "from args_oap import settings, make_db, stage_one, stage_two; print('All modules imported successfully')" || true
+    if ! python3 -c "from args_oap import settings, make_db, stage_one, stage_two; print('All modules imported successfully')"; then
+        echo "ERROR: Failed to import required args_oap Python modules." >&2
+        exit 1
+    fi
     
     echo "Container tests passed!"

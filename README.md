@@ -41,7 +41,8 @@ Install from this repository:
 ```bash
 git clone https://github.com/MDSharma/args_oap_singularity.git
 cd args_oap_singularity
-git checkout copilot/refactor-args-oap-for-singularity
+# Note: After PR is merged, checkout main branch or a release tag
+# For now, during development: git checkout copilot/refactor-args-oap-for-singularity
 
 # Create conda environment with dependencies
 conda create -n args_oap -c bioconda -c conda-forge \
@@ -62,7 +63,8 @@ If your OS has all dependencies (`python>=3.7`, `diamond>=2.0.15`, `bwa>=0.7.17`
 ```bash
 git clone https://github.com/MDSharma/args_oap_singularity.git
 cd args_oap_singularity
-git checkout copilot/refactor-args-oap-for-singularity
+# Note: After PR is merged, checkout main branch or a release tag
+# For now, during development: git checkout copilot/refactor-args-oap-for-singularity
 python setup.py install  # use python3 if needed
 ```
 

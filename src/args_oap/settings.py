@@ -2,6 +2,7 @@ import os
 import re
 import logging
 from pathlib import Path
+from typing import Tuple, Optional
 
 from dataclasses import dataclass
 
@@ -137,7 +138,7 @@ class Setting:
         Returns:
             Base path for database indices (without extension)
         """
-        db_dir = os.path.dirname(db_fasta)
+        db_dir = os.path.dirname(db_fasta) or '.'
         db_basename = os.path.basename(db_fasta)
         
         # Check if the database directory is writable
@@ -148,7 +149,7 @@ class Setting:
             # If not writable (e.g., in Singularity container), use cache directory
             return os.path.join(self.db_cache, db_basename)
     
-    def db_index_exists(self, db_fasta: str) -> tuple[bool, str | None, str | None]:
+    def db_index_exists(self, db_fasta: str) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Check if database indices exist for a given FASTA file.
         Checks both the original location and cache location.
