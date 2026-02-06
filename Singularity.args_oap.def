@@ -1,0 +1,104 @@
+Bootstrap: docker
+From: rockylinux:8
+
+%labels
+    Author MD Sharma
+    Software ARGs-OAP
+    Version v3x
+    Database SARG
+    PackageManager micromamba
+
+%environment
+    export MAMBA_ROOT_PREFIX=/opt/mamba
+    export PATH=/opt/mamba/bin:/opt/args_oap:$PATH
+    export ARGSOAP_DB=/opt/args_oap_db
+    export LC_ALL=C
+    export LANG=C
+
+%post
+    set -eux
+
+    # ---- System basics ----
+    dnf -y update
+    dnf -y install \
+        wget \
+        git \
+        unzip \
+        tar \
+        bzip2 \
+        which \
+        ca-certificates \
+        gcc \
+        gcc-c++ \
+        make \
+        zlib-devel \
+        bzip2-devel \
+        xz-devel \
+        ncurses-devel \
+        libcurl-devel
+
+    dnf clean all
+
+    # ---- micromamba ----
+    export MAMBA_ROOT_PREFIX=/opt/mamba
+    mkdir -p /opt/mamba
+    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
+      | tar -xvj -C /usr/local/bin --strip-components=1 bin/micromamba
+
+    # Debug: confirm micromamba and root prefix
+    which micromamba
+    micromamba info
+
+    # ---- Create environment ----
+    micromamba install -y \
+      -c conda-forge \
+      -c bioconda \
+      --strict-channel-priority \
+      python=3.9 \
+      bwa \
+      samtools \
+      diamond \
+      blast \
+      hmmer \
+      pandas \
+      numpy \
+      biopython
+
+    micromamba clean --all --yes
+    export PATH=/opt/mamba/bin:$PATH
+
+    # ---- ARGs-OAP ----
+    git clone https://github.com/xinehc/args_oap.git /opt/args_oap
+    cd /opt/args_oap
+    /opt/mamba/bin/python -m pip install -e .
+    /opt/mamba/bin/python -m pip install --upgrade pip
+#   /opt/mamba/bin/python setup.py install
+
+    # ---- SARG database ----
+    mkdir -p /opt/args_oap_db
+    cd /opt/args_oap_db
+
+    wget https://smile.hku.hk/ARGs/dataset/indexingdownload/Short_subdatabase_V3.2.1.zip -O SARG.zip
+    unzip SARG.zip
+    rm -f SARG.zip
+
+    # Normalise naming (this is the key step)
+    mkdir -p SARG
+    mv Short_subdatabase/4.SARG_v3.2_20220917_Short_subdatabase.fasta SARG/SARG.fasta
+    mv Short_subdatabase/4.SARG_v3.2_20220917_Short_subdatabase_structure.txt SARG/
+
+    # Optional: remove cruft
+    rm -rf Short_subdatabase __MACOSX
+
+    # Sanity check
+    ls -l SARG
+
+    # Pre-index for speed
+    diamond makedb --in SARG/SARG.fasta -d SARG/SARG
+    makeblastdb -in SARG/SARG.fasta -dbtype prot
+
+    chmod -R a+rX /opt/args_oap /opt/args_oap_db
+
+%runscript
+    exec args_oap "$@"
+
