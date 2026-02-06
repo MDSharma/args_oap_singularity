@@ -77,7 +77,7 @@ def make_db(file, output_base=None):
             '-out', output_base], check=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
     except subprocess.CalledProcessError:
-        logger.critical(f'Cannot build BLAST database of <{file}>. Please check the format of input file (-i/--infile).')
+        logger.critical(f'Failed to create BLAST database indices for <{file}>. Please verify the file format.')
         sys.exit(2)
 
     logger.info('Finished.')

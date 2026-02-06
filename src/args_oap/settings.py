@@ -148,7 +148,7 @@ class Setting:
             # If not writable (e.g., in Singularity container), use cache directory
             return os.path.join(self.db_cache, db_basename)
     
-    def db_index_exists(self, db_fasta: str) -> tuple:
+    def db_index_exists(self, db_fasta: str) -> tuple[bool, str | None, str | None]:
         """
         Check if database indices exist for a given FASTA file.
         Checks both the original location and cache location.
