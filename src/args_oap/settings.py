@@ -147,6 +147,34 @@ class Setting:
         else:
             # If not writable (e.g., in Singularity container), use cache directory
             return os.path.join(self.db_cache, db_basename)
+    
+    def db_index_exists(self, db_fasta: str) -> tuple:
+        """
+        Check if database indices exist for a given FASTA file.
+        Checks both the original location and cache location.
+        
+        Args:
+            db_fasta: Path to the database FASTA file
+            
+        Returns:
+            tuple: (exists: bool, dbtype: str or None, index_path: str or None)
+                   - exists: True if indices found
+                   - dbtype: 'prot' or 'nucl' if found, None otherwise
+                   - index_path: Path to the indices if found, None otherwise
+        """
+        index_base = self.get_db_index_path(db_fasta)
+        
+        # Check for protein database
+        if os.path.isfile(f'{index_base}.pdb') or os.path.isfile(f'{db_fasta}.pdb'):
+            found_path = index_base if os.path.isfile(f'{index_base}.pdb') else db_fasta
+            return (True, 'prot', found_path)
+        
+        # Check for nucleotide database
+        if os.path.isfile(f'{index_base}.ndb') or os.path.isfile(f'{db_fasta}.ndb'):
+            found_path = index_base if os.path.isfile(f'{index_base}.ndb') else db_fasta
+            return (True, 'nucl', found_path)
+        
+        return (False, None, None)
 
     @property
     def extracted(self) -> str:

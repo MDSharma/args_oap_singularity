@@ -60,12 +60,8 @@ class StageOne:
         
         missing_dbs = []
         for name, fasta_path in db_files.items():
-            index_base = self.setting.get_db_index_path(fasta_path)
-            # Check for either .ndb (nucleotide) or .pdb (protein) indices
-            if not (os.path.isfile(f'{index_base}.ndb') or 
-                    os.path.isfile(f'{index_base}.pdb') or
-                    os.path.isfile(f'{fasta_path}.ndb') or 
-                    os.path.isfile(f'{fasta_path}.pdb')):
+            exists, _, _ = self.setting.db_index_exists(fasta_path)
+            if not exists:
                 missing_dbs.append(fasta_path)
         
         if missing_dbs:
@@ -78,14 +74,8 @@ class StageOne:
 
         ## check database type of customized database
         ## Check both original location and cache location
-        db_index = self.setting.get_db_index_path(self.db)
-        if os.path.isfile(f'{db_index}.pdb') or os.path.isfile(f'{self.db}.pdb'):
-            self.dbtype = 'prot'
-            self.db_index = db_index if os.path.isfile(f'{db_index}.pdb') else self.db
-        elif os.path.isfile(f'{db_index}.ndb') or os.path.isfile(f'{self.db}.ndb'):
-            self.dbtype = 'nucl'
-            self.db_index = db_index if os.path.isfile(f'{db_index}.ndb') else self.db
-        else:
+        exists, self.dbtype, self.db_index = self.setting.db_index_exists(self.db)
+        if not exists:
             logger.critical(f'Cannot find database <{self.db}>. Please run <make_db> first or check database (--database).')
             sys.exit(2)
 

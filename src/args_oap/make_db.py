@@ -48,10 +48,16 @@ def make_db(file, output_base=None):
 
     except subprocess.CalledProcessError:
         try:
-            subprocess.run([
-                'bwa', 'index',
-                '-p', output_base,
-                file], check=True, stderr=subprocess.DEVNULL)
+            # Use -p flag only when output_base differs from input file
+            if output_base != file:
+                subprocess.run([
+                    'bwa', 'index',
+                    '-p', output_base,
+                    file], check=True, stderr=subprocess.DEVNULL)
+            else:
+                subprocess.run([
+                    'bwa', 'index',
+                    file], check=True, stderr=subprocess.DEVNULL)
             dbtype = 'nucl'
 
         except subprocess.CalledProcessError:
@@ -59,7 +65,7 @@ def make_db(file, output_base=None):
 
     ## if both diamond and bwa failed, dbtype will be None
     if dbtype is None:
-        logger.critical(f'Cannot build database of <{file}> using diamond or bwa. Please check the format of input file (-i/--infile).')
+        logger.critical(f'Cannot build database of <{file}> using diamond or bwa. Please verify the file format and ensure diamond/bwa are installed and accessible.')
         sys.exit(2)
 
     ## if makeblastdb fail then stop
