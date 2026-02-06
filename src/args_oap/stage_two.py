@@ -67,11 +67,9 @@ class StageTwo:
             sys.exit(2)
 
         ## database check
-        if os.path.isfile(f'{self.db}.pdb'):
-            self.dbtype = 'prot'
-        elif os.path.isfile(f'{self.db}.ndb'):
-            self.dbtype = 'nucl'
-        else:
+        ## Check both original location and cache location
+        exists, self.dbtype, self.db_index = self.setting.db_index_exists(self.db)
+        if not exists:
             logger.critical(f'Cannot find database <{self.db}>. Please run <makedb> first or check database (--database)')
             sys.exit(2)
 
@@ -113,7 +111,7 @@ class StageTwo:
 
         subprocess.run([
             blast_mode,
-            '-db', self.db,
+            '-db', self.db_index,
             '-query', self.setting.extracted,
             '-out', self.setting.blastout,
             '-outfmt', ' '.join(['6'] + self.setting.columns),

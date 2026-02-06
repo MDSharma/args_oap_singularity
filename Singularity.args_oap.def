@@ -1,104 +1,105 @@
 Bootstrap: docker
-From: rockylinux:8
+From: ubuntu:22.04
 
 %labels
-    Author MD Sharma
-    Software ARGs-OAP
-    Version v3x
-    Database SARG
-    PackageManager micromamba
+    Author MDSharma
+    Version 3.2.4-singularity
+    Description ARGs-OAP for antibiotic resistance genes detection - Singularity compatible version
+
+%help
+    This container provides ARGs-OAP v3.2.4 with Singularity container compatibility fixes.
+    
+    ARGs-OAP: Online Analysis Pipeline for Anti-biotic Resistance Genes Detection
+    from Meta-genomic Data Using an Integrated Structured ARG-database.
+    
+    Usage:
+        singularity exec args_oap.sif args_oap stage_one -i input -o output -f fq -t 8
+        singularity exec args_oap.sif args_oap stage_two -i output -t 8
+    
+    For more information, see:
+        https://github.com/MDSharma/args_oap_singularity
+    
+    Database cache directory:
+        By default, database indices are stored in ~/.args_oap/db_cache/
+        Override with: --env ARGS_OAP_CACHE=/path/to/cache
 
 %environment
-    export MAMBA_ROOT_PREFIX=/opt/mamba
-    export PATH=/opt/mamba/bin:/opt/args_oap:$PATH
-    export ARGSOAP_DB=/opt/args_oap_db
+    # Set locale
     export LC_ALL=C
     export LANG=C
+    
+    # Ensure conda-installed tools are on PATH at runtime
+    export PATH="/opt/conda/bin:$PATH"
+    
+    # Optional: Set custom cache location for database indices
+    # Uncomment and modify if you want a different default cache location
+    # export ARGS_OAP_CACHE=/opt/args_oap_cache
 
 %post
-    set -eux
-
-    # ---- System basics ----
-    dnf -y update
-    dnf -y install \
-        wget \
+    # Update and install system dependencies
+    apt-get update && apt-get install -y \
+        python3 \
+        python3-pip \
         git \
-        unzip \
-        tar \
+        wget \
         bzip2 \
-        which \
-        ca-certificates \
-        gcc \
-        gcc-c++ \
-        make \
-        zlib-devel \
-        bzip2-devel \
-        xz-devel \
-        ncurses-devel \
-        libcurl-devel
-
-    dnf clean all
-
-    # ---- micromamba ----
-    export MAMBA_ROOT_PREFIX=/opt/mamba
-    mkdir -p /opt/mamba
-    curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest \
-      | tar -xvj -C /usr/local/bin --strip-components=1 bin/micromamba
-
-    # Debug: confirm micromamba and root prefix
-    which micromamba
-    micromamba info
-
-    # ---- Create environment ----
-    micromamba install -y \
-      -c conda-forge \
-      -c bioconda \
-      --strict-channel-priority \
-      python=3.9 \
-      bwa \
-      samtools \
-      diamond \
-      blast \
-      hmmer \
-      pandas \
-      numpy \
-      biopython
-
-    micromamba clean --all --yes
-    export PATH=/opt/mamba/bin:$PATH
-
-    # ---- ARGs-OAP ----
-    git clone https://github.com/xinehc/args_oap.git /opt/args_oap
-    cd /opt/args_oap
-    /opt/mamba/bin/python -m pip install -e .
-    /opt/mamba/bin/python -m pip install --upgrade pip
-#   /opt/mamba/bin/python setup.py install
-
-    # ---- SARG database ----
-    mkdir -p /opt/args_oap_db
-    cd /opt/args_oap_db
-
-    wget https://smile.hku.hk/ARGs/dataset/indexingdownload/Short_subdatabase_V3.2.1.zip -O SARG.zip
-    unzip SARG.zip
-    rm -f SARG.zip
-
-    # Normalise naming (this is the key step)
-    mkdir -p SARG
-    mv Short_subdatabase/4.SARG_v3.2_20220917_Short_subdatabase.fasta SARG/SARG.fasta
-    mv Short_subdatabase/4.SARG_v3.2_20220917_Short_subdatabase_structure.txt SARG/
-
-    # Optional: remove cruft
-    rm -rf Short_subdatabase __MACOSX
-
-    # Sanity check
-    ls -l SARG
-
-    # Pre-index for speed
-    diamond makedb --in SARG/SARG.fasta -d SARG/SARG
-    makeblastdb -in SARG/SARG.fasta -dbtype prot
-
-    chmod -R a+rX /opt/args_oap /opt/args_oap_db
+        && rm -rf /var/lib/apt/lists/*
+    
+    # Install conda/mamba
+    wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O miniforge.sh
+    bash miniforge.sh -b -p /opt/conda
+    rm miniforge.sh
+    
+    # Add conda to PATH
+    export PATH="/opt/conda/bin:$PATH"
+    
+    # Initialize conda
+    /opt/conda/bin/conda init bash
+    
+    # Install dependencies via conda
+    /opt/conda/bin/mamba install -y -c bioconda -c conda-forge \
+        python>=3.7 \
+        diamond>=2.0.15 \
+        bwa>=0.7.17 \
+        blast>=2.12 \
+        samtools>=1.15 \
+        pandas
+    
+    # Install args_oap from this repository (Singularity-compatible version)
+    # Using the fork with Singularity container compatibility fixes
+    cd /tmp
+    git clone https://github.com/MDSharma/args_oap_singularity.git
+    cd args_oap_singularity
+    
+    # Install from main branch (after PR is merged)
+    # Note: Use a specific tag for production (e.g., git checkout v3.2.4-singularity)
+    /opt/conda/bin/pip install .
+    
+    # Clean up
+    cd /
+    rm -rf /tmp/args_oap_singularity
+    
+    # Clean conda cache
+    /opt/conda/bin/conda clean -a -y
 
 %runscript
+    # Default action when container is run
     exec args_oap "$@"
 
+%test
+    # Test that args_oap is installed correctly
+    args_oap --version
+    
+    # Test that all required tools are available
+    which diamond
+    which bwa
+    which blastn
+    which samtools
+    
+    # Test Python imports
+    if ! python3 -c "from args_oap import settings, make_db, stage_one, stage_two; print('All modules imported successfully')"; then
+        echo "ERROR: Failed to import required args_oap Python modules." >&2
+        exit 1
+    fi
+    
+    echo "Container tests passed!"

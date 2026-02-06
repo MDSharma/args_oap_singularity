@@ -51,23 +51,31 @@ class StageOne:
                     pass
 
         ## first time running, build database manually
-        if not (
-            os.path.isfile(f'{self.setting.gg85}.ndb') or
-            os.path.isfile(f'{self.setting.ko30}.pdb') or
-            os.path.isfile(f'{self.setting.sarg}.pdb')
-        ):
+        ## Check for database indices in both original and cache locations
+        db_files = {
+            'gg85': self.setting.gg85,
+            'ko30': self.setting.ko30,
+            'sarg': self.setting.sarg
+        }
+        
+        missing_dbs = []
+        for name, fasta_path in db_files.items():
+            exists, _, _ = self.setting.db_index_exists(fasta_path)
+            if not exists:
+                missing_dbs.append(fasta_path)
+        
+        if missing_dbs:
             logger.info('Building databases ...')
             logger.disabled = True  # skip logging
-            for file in [self.setting.gg85, self.setting.ko30, self.setting.sarg]:
-                make_db(file)
+            for file in missing_dbs:
+                output_base = self.setting.get_db_index_path(file)
+                make_db(file, output_base)
             logger.disabled = False
 
         ## check database type of customized database
-        if os.path.isfile(f'{self.db}.pdb'):
-            self.dbtype = 'prot'
-        elif os.path.isfile(f'{self.db}.ndb'):
-            self.dbtype = 'nucl'
-        else:
+        ## Check both original location and cache location
+        exists, self.dbtype, self.db_index = self.setting.db_index_exists(self.db)
+        if not exists:
             logger.critical(f'Cannot find database <{self.db}>. Please run <make_db> first or check database (--database).')
             sys.exit(2)
 
@@ -75,12 +83,14 @@ class StageOne:
         '''
         Count 16S (GreenGenes 16S rRNA Database 85%) copy number using bwa (pre-filtering) and blastn (post-filtering).
         '''
+        gg85_index = self.setting.get_db_index_path(self.setting.gg85)
+        
         ## pre-filtering using bwa
         subprocess.run([
             'bwa', 'mem',
             '-t', str(self.thread),
             '-o', file.tmp_16s_sam,
-            self.setting.gg85, file.file], check=True, stderr=subprocess.DEVNULL)
+            gg85_index, file.file], check=True, stderr=subprocess.DEVNULL)
 
         ## convert sam to fasta for later usage, note that reads can be duplicated
         with open(file.tmp_16s_fa, 'w') as f:
@@ -95,7 +105,7 @@ class StageOne:
         mt_mode = '1' if simple_count(file.tmp_16s_fa)[0] / self.thread >= 2500000 else '0'
         subprocess.run([
             'blastn',
-            '-db', self.setting.gg85,
+            '-db', gg85_index,
             '-query', file.tmp_16s_fa,
             '-out', file.tmp_16s_txt,
             '-outfmt', ' '.join(['6'] + self.setting.columns),
@@ -120,10 +130,12 @@ class StageOne:
         '''
         Count Essential Single Copy Marker Genes (cell number) using diamond.
         '''
+        ko30_index = self.setting.get_db_index_path(self.setting.ko30)
+        
         ## filter using diamond
         subprocess.run([
             'diamond', 'blastx',
-            '--db', f'{self.setting.ko30}.dmnd',
+            '--db', f'{ko30_index}.dmnd',
             '--query', file.file,
             '--out', file.tmp_cells_txt,
             '--outfmt', '6'] + self.setting.columns + [
@@ -154,7 +166,7 @@ class StageOne:
         if self.dbtype == 'prot':
             subprocess.run([
                 'diamond', 'blastx',
-                '--db', f'{self.db}.dmnd',
+                '--db', f'{self.db_index}.dmnd',
                 '--query', file.file,
                 '--out', file.tmp_seqs_txt,
                 '--outfmt', '6', 'qseqid', 'full_qseq',
@@ -170,7 +182,7 @@ class StageOne:
                 'bwa', 'mem',
                 '-t', str(self.thread),
                 '-o', file.tmp_seqs_sam,
-                self.db, file.file], check=True, stderr=subprocess.DEVNULL)
+                self.db_index, file.file], check=True, stderr=subprocess.DEVNULL)
 
             with open(file.tmp_seqs_fa, 'w') as f:
                 subprocess.run([

@@ -1,6 +1,8 @@
 import os
 import re
 import logging
+from pathlib import Path
+from typing import Tuple, Optional
 
 from dataclasses import dataclass
 
@@ -70,12 +72,32 @@ class File:
         return os.path.join(self.outdir, self.file_name + '.seqs.sam.tmp')
 
 
+## setup database cache directory
+def get_db_cache_dir() -> str:
+    """
+    Get or create a writable directory for database indices.
+    Uses ~/.args_oap/db_cache/ by default, or ARGS_OAP_CACHE env variable.
+    """
+    cache_dir = os.environ.get('ARGS_OAP_CACHE')
+    if cache_dir is None:
+        cache_dir = os.path.join(Path.home(), '.args_oap', 'db_cache')
+    
+    os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
 ## setup database
 @dataclass
 class Setting:
     indir: str
     outdir: str
     db: str = os.path.join(os.path.dirname(__file__), 'db')
+    db_cache: str = None
+    
+    def __post_init__(self):
+        """Initialize db_cache after instance creation."""
+        if self.db_cache is None:
+            self.db_cache = get_db_cache_dir()
 
     @property
     def sarg(self) -> str:
@@ -104,6 +126,56 @@ class Setting:
     @property
     def ko30_structure(self) -> str:
         return os.path.join(self.db, 'ko30_structure.txt')
+    
+    def get_db_index_path(self, db_fasta: str) -> str:
+        """
+        Get the path where database indices should be stored.
+        Uses cache directory for read-only environments, or same dir if writable.
+        
+        Args:
+            db_fasta: Path to the database FASTA file
+            
+        Returns:
+            Base path for database indices (without extension)
+        """
+        db_dir = os.path.dirname(db_fasta) or '.'
+        db_basename = os.path.basename(db_fasta)
+        
+        # Check if the database directory is writable
+        if os.access(db_dir, os.W_OK):
+            # If writable, use the same directory as the FASTA file
+            return db_fasta
+        else:
+            # If not writable (e.g., in Singularity container), use cache directory
+            return os.path.join(self.db_cache, db_basename)
+    
+    def db_index_exists(self, db_fasta: str) -> Tuple[bool, Optional[str], Optional[str]]:
+        """
+        Check if database indices exist for a given FASTA file.
+        Checks both the original location and cache location.
+        
+        Args:
+            db_fasta: Path to the database FASTA file
+            
+        Returns:
+            tuple: (exists: bool, dbtype: str or None, index_path: str or None)
+                   - exists: True if indices found
+                   - dbtype: 'prot' or 'nucl' if found, None otherwise
+                   - index_path: Path to the indices if found, None otherwise
+        """
+        index_base = self.get_db_index_path(db_fasta)
+        
+        # Check for protein database
+        if os.path.isfile(f'{index_base}.pdb') or os.path.isfile(f'{db_fasta}.pdb'):
+            found_path = index_base if os.path.isfile(f'{index_base}.pdb') else db_fasta
+            return (True, 'prot', found_path)
+        
+        # Check for nucleotide database
+        if os.path.isfile(f'{index_base}.ndb') or os.path.isfile(f'{db_fasta}.ndb'):
+            found_path = index_base if os.path.isfile(f'{index_base}.ndb') else db_fasta
+            return (True, 'nucl', found_path)
+        
+        return (False, None, None)
 
     @property
     def extracted(self) -> str:

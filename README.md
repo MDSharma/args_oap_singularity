@@ -1,28 +1,86 @@
-# ARGs_OAP
-This repository was created by Xiaole Yin (_xiaole99_) and is currently maintained by Xi Chen (_xinhec_). The goal is to make args_oap faster, and easier to run. 
+# ARGs_OAP - Singularity Compatible Fork
 
-If you have any questions, please create an [issue](https://github.com/xinehc/args_oap/issues/new/choose), or contact Xiaole Yin ([yinlele99@gmail.com](yinlele99@gmail.com)).
+This is a fork of ARGs-OAP with **Singularity container compatibility fixes**. It addresses issues that cause the tool to fail inside Singularity containers where the file system is read-only.
 
-More about the SARG database: [https://smile.hku.hk/ARGs/Indexing](https://smile.hku.hk/ARGs/Indexing), and the change logs: [CHANGELOG.md](https://github.com/xinehc/args_oap/blob/main/CHANGELOG.md).
+**Original repository:** [xinehc/args_oap](https://github.com/xinehc/args_oap)  
+**This fork:** [MDSharma/args_oap_singularity](https://github.com/MDSharma/args_oap_singularity)
+
+## What's New in This Fork
+
+✅ **Singularity Container Support** - Works seamlessly in read-only environments  
+✅ **Fixed UnboundLocalError** - The misleading `dbtype` error is now resolved  
+✅ **Database Index Caching** - Indices stored in user-writable cache directory  
+✅ **Backward Compatible** - Works exactly as before in normal Conda environments  
+✅ **Better Error Messages** - More helpful diagnostics when things go wrong
+
+See [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md) for technical details.
+
+---
 
 ## Installation
-Conda (macOS/Linux):
+
+### Option 1: Singularity Container (Recommended for HPC/Read-only Systems)
+
+Build the Singularity container:
+```bash
+sudo singularity build args_oap.sif Singularity.args_oap.def
+# or with fakeroot: singularity build --fakeroot args_oap.sif Singularity.args_oap.def
+```
+
+Use the container:
+```bash
+singularity exec args_oap.sif args_oap stage_one -i input -o output -f fq -t 8
+singularity exec args_oap.sif args_oap stage_two -i output -t 8
+```
+
+📖 **Full Singularity guide:** [SINGULARITY_USAGE.md](SINGULARITY_USAGE.md)
+
+### Option 2: Conda (macOS/Linux)
+
+Install from this repository:
+```bash
+git clone https://github.com/MDSharma/args_oap_singularity.git
+cd args_oap_singularity
+# Note: After PR is merged, checkout main branch or a release tag
+# For now, during development: git checkout copilot/refactor-args-oap-for-singularity
+
+# Create conda environment with dependencies
+conda create -n args_oap -c bioconda -c conda-forge \
+    python>=3.7 diamond>=2.0.15 bwa>=0.7.17 blast>=2.12 samtools>=1.15 pandas
+
+conda activate args_oap
+pip install .
+```
+
+Or use the original bioconda package (without Singularity fixes):
 ```bash
 conda install -c bioconda -c conda-forge args_oap
 ```
 
-We suggest to create a new conda environment (here use `-n args_oap` as an example) to avoid potential conflicts of dependencies:
-```bash
-conda create -n args_oap -c bioconda -c conda-forge args_oap
-conda activate args_oap
-```
+### Option 3: From Source
 
-If your OS satisfies all the dependencies (`python>=3.7`, `diamond>=2.0.15`, `bwa>=0.7.17`, `blast>=2.12`, `samtools>=1.15`), then build from source:
+If your OS has all dependencies (`python>=3.7`, `diamond>=2.0.15`, `bwa>=0.7.17`, `blast>=2.12`, `samtools>=1.15`):
 ```bash
-git clone https://github.com/xinehc/args_oap.git
-cd args_oap
+git clone https://github.com/MDSharma/args_oap_singularity.git
+cd args_oap_singularity
+# Note: After PR is merged, checkout main branch or a release tag
+# For now, during development: git checkout copilot/refactor-args-oap-for-singularity
 python setup.py install  # use python3 if needed
 ```
+
+---
+
+## About ARGs-OAP
+
+This repository was originally created by Xiaole Yin (_xiaole99_) and is currently maintained by Xi Chen (_xinhec_). The goal is to make args_oap faster, and easier to run. 
+
+If you have questions about the original ARGs-OAP, please create an [issue](https://github.com/xinehc/args_oap/issues/new/choose), or contact Xiaole Yin ([yinlele99@gmail.com](yinlele99@gmail.com)).
+
+**For Singularity-specific issues**, please use [this repository's issue tracker](https://github.com/MDSharma/args_oap_singularity/issues).
+
+More about the SARG database: [https://smile.hku.hk/ARGs/Indexing](https://smile.hku.hk/ARGs/Indexing), and the change logs: [CHANGELOG.md](https://github.com/xinehc/args_oap/blob/main/CHANGELOG.md).
+
+---
 
 ## Example
 Two example fasta files (100k paired-end reads, 100 bp each) can be found [here](https://dl.dropboxusercontent.com/s/pqgftlo24rfc2rd/example.tar.gz). The zipped file can be downloaded manually or using `wget`:
@@ -63,6 +121,36 @@ For example, `normalized_cell.type` means:
 | tetracycline                        | 0.012183242185747383 | 0.09987284037027115  |
 
 Output file `extracted.filtered.fa` contains all filtered ARG-like sequences after `stage_two`. `blastout.filtered.txt` is the metadata of these sequences.
+
+## Database Cache (New in This Fork)
+
+This fork introduces automatic database index caching to support read-only environments like Singularity containers.
+
+**How it works:**
+- On first run, database indices (`.pdb`, `.ndb`, `.dmnd`) are created
+- In writable environments (Conda): indices stored next to FASTA files (backward compatible)
+- In read-only environments (Singularity): indices stored in `~/.args_oap/db_cache/`
+
+**Custom cache location:**
+```bash
+# Set custom cache directory
+export ARGS_OAP_CACHE=/path/to/custom/cache
+
+# Then run normally
+args_oap stage_one -i input -o output -f fq -t 8
+```
+
+**For Singularity users:**
+```bash
+# Use custom cache location
+singularity exec --env ARGS_OAP_CACHE=/scratch/cache args_oap.sif args_oap stage_one -i input -o output
+
+# Or bind your cache directory
+singularity exec --bind $HOME/.args_oap:/root/.args_oap args_oap.sif args_oap stage_one -i input -o output
+```
+
+See [SINGULARITY_COMPAT.md](SINGULARITY_COMPAT.md) for more details.
+
 ### De-contamination: 
 Before running ARGs-OAP, a de-contamination processes is recommended to secure clean prokaryotic reads. This includes the removal of genomic sequences from hosts (e.g., human), and from fungal sources. This step is critical to avoid potential biases in the calculation of cell numbers which relies on the identification of essential single copy marker genes.
 
